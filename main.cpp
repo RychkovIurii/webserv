@@ -5,26 +5,20 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/04/29 13:42:50 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/29 14:58:09 by irychkov         ###   ########.fr       */
+/*   Created: 2025/04/30 10:31:52 by irychkov          #+#    #+#             */
+/*   Updated: 2025/04/30 11:08:21 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include <iostream>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <string>
-#include <arpa/inet.h>
+#include "Config.hpp"
+#include "Server.hpp"
+#include "Location.hpp"
 
-struct s_server_data {
-	std::string server_name;
-	int listen;
-};
-
-int	main(int ac, char **av)
+int	main(int ac, char** av)
 {
 	std::string config_file;
+
 	if (ac == 1)
 		config_file = "default.conf";
 	else if (ac == 2)
@@ -36,45 +30,69 @@ int	main(int ac, char **av)
 		std::cout << "  ./webserv config.conf" << std::endl;
 		return(0);
 	}
-	
-	s_server_data config;
-	config.server_name = "localhost";
-	config.listen = 8080;
 
-	int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-	sockaddr_in serverAddress;
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_port = htons(8080);
-	if (config.server_name == "localhost")
-		serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
-	else
-		serverAddress.sin_addr.s_addr = INADDR_ANY;
-	// binding socket.
-	bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+	// here I would parse the config file
+	/* ConfigParser parser;
+	Config config;
 
-	// listening to the assigned socket
-	listen(serverSocket, 5);
+	std::vector<Server> servers = parser.parseConfig(config_file);
+	for (size_t i = 0; i < servers.size(); ++i) {
+		config.addServer(servers[i]);
+	} */
+	// and populate the Config object with servers and locations
+	// For demonstration, we create a Config object manually
+	Config config;
 
-	// accepting connection request
-	int clientSocket = accept(serverSocket, nullptr, nullptr);
+	Server server1;
+	server1.setPort(8080);
+	server1.setHost("127.0.0.1");
+	server1.addServerName("example.com");
 
-	// receiving data
-	char buffer[1024] = { 0 };
-	recv(clientSocket, buffer, sizeof(buffer), 0);
-	std::cout << "Message from client: " << buffer << std::endl;
+	Location loc1;
+	loc1.path = "/";
+	loc1.root = "/var/www/html";
+	loc1.autoindex = false;
+	server1.addLocation(loc1);
 
-	std::string response =
-	"HTTP/1.1 200 OK\r\n"
-	"Content-Type: text/html\r\n"
-	"Content-Length: 29\r\n"
-	"\r\n"
-	"<h1>Hello from Webserv!</h1>";
+	config.addServer(server1);
 
-	send(clientSocket, response.c_str(), response.size(), 0);
+	Server server2;
+	server2.setPort(8081);
+	server2.setHost("0.0.0.0");
+	server2.addServerName("test.com");
 
-	close(clientSocket);
-	close(serverSocket);
-	
+	Location loc2;
+	loc2.path = "/uploads";
+	loc2.root = "/var/www/uploads";
+	loc2.autoindex = true;
+	server2.addLocation(loc2);
 
-	return 0;
+	config.addServer(server2);
+
+	// Print the configuration
+	const std::vector<Server>& servers = config.getServers();
+	for (size_t i = 0; i < servers.size(); ++i) {
+		std::cout << "Server " << i + 1 << ": "
+				<< servers[i].getHost() << ":"
+				<< servers[i].getPort() << std::endl;
+
+		const std::vector<std::string>& names = servers[i].getServerNames();
+		for (size_t j = 0; j < names.size(); ++j) {
+			std::cout << "  server_name: " << names[j] << std::endl;
+		}
+
+		const std::vector<Location>& locations = servers[i].getLocations();
+		for (size_t k = 0; k < locations.size(); ++k) {
+			std::cout << "  location: " << locations[k].path
+					  << " -> root: " << locations[k].root
+					  << ", autoindex: ";
+			if (locations[k].autoindex)
+				std::cout << "on";
+			else
+				std::cout << "off";
+			std::cout << std::endl;
+		}
+	}
+
+	return (0);
 }
