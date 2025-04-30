@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:20:59 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 14:41:16 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 14:52:21 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -89,8 +89,11 @@ void ConfigParser::parseLocation(std::ifstream& file, Location& location, int& l
 			values.pop_back();
 			std::stringstream ss(values);
 			std::string method;
-			while (ss >> method)
+			while (ss >> method) {
+				if (method != "GET" && method != "POST" && method != "DELETE")
+					throw CustomError("Line " + std::to_string(line_number) + ": invalid HTTP method: " + method);
 				location.methods.push_back(method);
+			}
 		}
 		else if (line.compare(0, 13, "cgi_extension") == 0) {
 			std::string value = trim(line.substr(13));
