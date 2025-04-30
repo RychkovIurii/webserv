@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:08:30 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 12:21:21 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 13:52:22 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,5 +35,5 @@ class ConfigParser {
 
 	private:
 		void parseServer( std::ifstream& file, Server& server );
-		void parseLocation( std::ifstream& file, Location& location );
+		void parseLocation( std::ifstream& file, Location& location, int& line_number );
 	};

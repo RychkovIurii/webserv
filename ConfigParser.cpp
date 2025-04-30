@@ -6,11 +6,12 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:20:59 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 12:22:52 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 13:50:20 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ConfigParser.hpp"
+#include <sstream>
 
 ConfigParser :: ConfigParser( void ) { }
 
@@ -23,4 +24,179 @@ ConfigParser::CustomError::CustomError( const std::string& msg ) {
 
 const char* ConfigParser::CustomError::what() const throw() {
 	return (_msg.c_str());
+}
+
+/*
+Helper function to trim whitespace from the beginning and end of a string
+*/
+static std::string trim( const std::string& s )
+{
+	size_t start = s.find_first_not_of(" \t\r\n");
+	size_t end = s.find_last_not_of(" \t\r\n");
+	if (start == std::string::npos)
+		return ("");
+	return (s.substr(start, end - start + 1));
+}
+
+/*
+Helper function to remove comments from a string
+*/
+static std::string removeComment( const std::string& s )
+{
+	size_t pos = s.find('#');
+	if (pos == std::string::npos)
+		return (trim(s));
+	else
+		return (trim(s.substr(0, pos)));
+}
+
+void ConfigParser::parseLocation(std::ifstream& file, Location& location, int& line_number) {
+	std::string line;
+	int brace_depth = 1;
+
+	while (std::getline(file, line)) {
+		line_number++;
+		line = removeComment(line);
+		if (line.empty())
+			continue;
+
+		line = trim(line);
+		if (line == "}") {
+			brace_depth--;
+			if (brace_depth == 0)
+				break;
+			continue;
+		}
+
+		if (line.compare(0, 4, "root") == 0) {
+			std::string value = trim(line.substr(4));
+			if (value.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in root");
+			value.pop_back();
+			location.root = trim(value);
+		}
+		else if (line.compare(0, 9, "autoindex") == 0) {
+			std::string val = trim(line.substr(9));
+			if (val.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in autoindex");
+			val.pop_back();
+			val = trim(val);
+			if (val == "on")
+				location.autoindex = true;
+			else if (val == "off")
+				location.autoindex = false;
+			else
+				throw CustomError("Line " + std::to_string(line_number) + ": autoindex must be 'on' or 'off'");
+		}
+		else {
+			throw CustomError("Line " + std::to_string(line_number) + ": Unknown directive in location block: " + line);
+		}
+	}
+}
+
+void ConfigParser::parseServer(std::ifstream& file, Server& server) {
+	std::string line;
+	int line_number = 0;
+	int brace_depth = 1;
+
+	while (std::getline(file, line)) {
+		line_number++;
+		line = removeComment(line);
+		if (line.empty())
+			continue;
+
+		line = trim(line);
+		if (line == "}") {
+			brace_depth--;
+			if (brace_depth == 0)
+				break;
+			continue;
+		}
+
+		if (line.compare(0, 6, "listen") == 0) {
+			std::string value = trim(line.substr(6));
+			if (value.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in listen");
+			value.pop_back();
+			server.setPort(std::stoi(trim(value)));
+		}
+		else if (line.compare(0, 4, "host") == 0) {
+			std::string value = trim(line.substr(4));
+			if (value.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in host");
+			value.pop_back();
+			server.setHost(trim(value));
+		}
+		else if (line.compare(0, 11, "server_name") == 0) {
+			std::string names = trim(line.substr(11));
+			if (names.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in server_name");
+			names.pop_back();
+			std::stringstream ss(names);
+			std::string name;
+			while (ss >> name)
+				server.addServerName(name);
+		}
+		else if (line.compare(0, 20, "client_max_body_size") == 0) {
+			std::string size_str = trim(line.substr(22));
+			if (size_str.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in client_max_body_size");
+			size_str.pop_back();
+			server.setClientMaxBodySize(std::stoul(trim(size_str)));
+		}
+		else if (line.compare(0, 10, "error_page") == 0) {
+			std::string rest = trim(line.substr(10));
+			if (rest.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in error_page");
+			rest.pop_back();
+			std::stringstream ss(rest);
+			int code;
+			std::string path;
+			if (!(ss >> code >> path))
+				throw CustomError("Line " + std::to_string(line_number) + ": malformed error_page");
+			server.setErrorPage(code, path);
+		}
+		else if (line.compare(0, 8, "location") == 0) {
+			size_t path_start = line.find_first_not_of(" \t", 8);
+			size_t path_end = line.find_first_of(" \t{", path_start);
+			std::string loc_path = line.substr(path_start, path_end - path_start);
+
+			if (line.find("{", path_end) == std::string::npos)
+				throw CustomError("Line " + std::to_string(line_number) + ": expected '{' in location");
+
+			Location location;
+			location.path = loc_path;
+			parseLocation(file, location, line_number);
+			server.addLocation(location);
+		}
+		else {
+			throw CustomError("Line " + std::to_string(line_number) + ": Unknown directive in server block: " + line);
+		}
+	}
+}
+
+std::vector<Server> ConfigParser::parseConfig( const std::string& filepath ) {
+	std::ifstream file(filepath.c_str());
+	if (!file.is_open())
+		throw CustomError("Failed to open config file: " + filepath);
+
+	std::vector<Server> servers;
+	std::string line;
+	int line_number = 0;
+
+	while (std::getline(file, line)) {
+		line_number++;
+		line = removeComment(line);
+		if (line.empty()) continue;
+
+		line = trim(line);
+		if (line == "server {") {
+			Server server;
+			parseServer(file, server);
+			servers.push_back(server);
+		} else if (!line.empty()) {
+			throw CustomError("Line " + std::to_string(line_number) + ": Expected 'server {' but got '" + line + "'"); // to_string also May throw std::bad_alloc from the std::string constructor. Think
+		}
+	}
+	return servers;
 }
