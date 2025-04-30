@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:20:59 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 14:24:43 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 14:41:16 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -190,19 +190,42 @@ void ConfigParser::parseServer(std::ifstream& file, Server& server) {
 			if (size_str.back() != ';')
 				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in client_max_body_size");
 			size_str.pop_back();
-			server.setClientMaxBodySize(std::stoul(trim(size_str)));
+			size_str = trim(size_str);
+		
+			size_t multiplier = 1;
+			char suffix = size_str.back();
+			if (suffix == 'k' || suffix == 'K') multiplier = 1024;
+			else if (suffix == 'm' || suffix == 'M') multiplier = 1024 * 1024;
+			else if (suffix == 'g' || suffix == 'G') multiplier = 1024 * 1024 * 1024;
+		
+			if (isalpha(suffix))
+				size_str = size_str.substr(0, size_str.length() - 1);
+		
+			size_t size = std::stoul(size_str) * multiplier;
+			server.setClientMaxBodySize(size);
 		}
 		else if (line.compare(0, 10, "error_page") == 0) {
 			std::string rest = trim(line.substr(10));
 			if (rest.back() != ';')
 				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in error_page");
 			rest.pop_back();
+		
 			std::stringstream ss(rest);
-			int code;
+			std::string token;
+			std::vector<int> codes;
 			std::string path;
-			if (!(ss >> code >> path))
+		
+			while (ss >> token) {
+				if (token[0] == '/')
+					path = token;
+				else
+					codes.push_back(std::stoi(token));
+			}
+			if (path.empty() || codes.empty())
 				throw CustomError("Line " + std::to_string(line_number) + ": malformed error_page");
-			server.setErrorPage(code, path);
+		
+			for (size_t i = 0; i < codes.size(); ++i)
+				server.setErrorPage(codes[i], path);
 		}
 		else if (line.compare(0, 8, "location") == 0) {
 			size_t path_start = line.find_first_not_of(" \t", 8);
