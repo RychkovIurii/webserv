@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:31:52 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 15:08:19 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 16:23:49 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 #include "Server.hpp"
 #include "Location.hpp"
 #include "ConfigParser.hpp"
+#include "SocketManager.hpp"
 
 static void print_usage( void )
 {
@@ -115,6 +116,9 @@ int	main(int ac, char** av)
 		}
 		// Print the configuration
 		print_config(config);
+
+		SocketManager manager(all_servers);
+		manager.run();
 	} catch (const ConfigParser::CustomError& e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 		return (1);
