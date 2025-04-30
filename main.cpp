@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:31:52 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 13:45:09 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 14:29:15 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,25 +44,65 @@ int	main(int ac, char** av)
 		// Print the configuration
 		const std::vector<Server>& servers = config.getServers();
 		for (size_t i = 0; i < servers.size(); ++i) {
+			const Server& server = servers[i];
+		
 			std::cout << "Server " << i + 1 << ": "
-					<< servers[i].getHost() << ":"
-					<< servers[i].getPort() << std::endl;
-
-			const std::vector<std::string>& names = servers[i].getServerNames();
+					  << server.getHost() << ":"
+					  << server.getPort() << std::endl;
+		
+			// Server Names
+			const std::vector<std::string>& names = server.getServerNames();
 			for (size_t j = 0; j < names.size(); ++j) {
 				std::cout << "  server_name: " << names[j] << std::endl;
 			}
-
-			const std::vector<Location>& locations = servers[i].getLocations();
+		
+			// Error Pages
+			const std::map<int, std::string>& errors = server.getErrorPages();
+			for (std::map<int, std::string>::const_iterator it = errors.begin(); it != errors.end(); ++it) {
+				std::cout << "  error_page " << it->first << ": " << it->second << std::endl;
+			}
+		
+			// Client Body Size
+			std::cout << "  client_max_body_size: " << server.getClientMaxBodySize() << std::endl;
+		
+			// Locations
+			const std::vector<Location>& locations = server.getLocations();
 			for (size_t k = 0; k < locations.size(); ++k) {
-				std::cout << "  location: " << locations[k].path
-						<< " -> root: " << locations[k].root
-						<< ", autoindex: ";
-				if (locations[k].autoindex)
-					std::cout << "on";
-				else
-					std::cout << "off";
+				const Location& loc = locations[k];
+		
+				std::cout << "  location " << loc.path << ":" << std::endl;
+				std::cout << "    root: " << loc.root << std::endl;
+				std::cout << "    index: " << loc.index << std::endl;
+		
+				std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
+		
+				// Methods
+				std::cout << "    methods: ";
+				if (loc.methods.empty())
+					std::cout << "(none)";
+				else {
+					for (size_t m = 0; m < loc.methods.size(); ++m)
+						std::cout << loc.methods[m] << " ";
+				}
 				std::cout << std::endl;
+		
+				// Redirection
+				if (!loc.redirect.empty()) {
+					std::cout << "    redirect: " << loc.redirect;
+					if (loc.return_code)
+						std::cout << " (code " << loc.return_code << ")";
+					std::cout << std::endl;
+				}
+		
+				// Uploads
+				if (!loc.upload_store.empty()) {
+					std::cout << "    upload_store: " << loc.upload_store << std::endl;
+				}
+		
+				// CGI
+				if (!loc.cgi_extension.empty()) {
+					std::cout << "    cgi_pass: " << loc.cgi_extension << std::endl;
+				}
 			}
 		}
 	} catch (const ConfigParser::CustomError& e) {

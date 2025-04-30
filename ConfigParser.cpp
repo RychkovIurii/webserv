@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 10:20:59 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 13:50:20 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/04/30 14:24:43 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -75,6 +75,54 @@ void ConfigParser::parseLocation(std::ifstream& file, Location& location, int& l
 			value.pop_back();
 			location.root = trim(value);
 		}
+		else if (line.compare(0, 5, "index") == 0) {
+			std::string value = trim(line.substr(5));
+			if (value.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in index");
+			value.pop_back();
+			location.index = trim(value);
+		}
+		else if (line.compare(0, 7, "methods") == 0) {
+			std::string values = trim(line.substr(7));
+			if (values.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in methods");
+			values.pop_back();
+			std::stringstream ss(values);
+			std::string method;
+			while (ss >> method)
+				location.methods.push_back(method);
+		}
+		else if (line.compare(0, 13, "cgi_extension") == 0) {
+			std::string value = trim(line.substr(13));
+			if (value.back() != ';') throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in cgi_pass");
+			value.pop_back();
+			location.cgi_extension = trim(value);
+		}
+		else if (line.compare(0, 6, "return") == 0) {
+			std::string rest = trim(line.substr(6));
+			if (rest.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in return");
+			rest.pop_back();
+		
+			std::stringstream ss(rest);
+			std::string first, second;
+			ss >> first >> second;
+		
+			if (second.empty()) {
+				location.return_code = 302;
+				location.redirect = first;
+			} else {
+				location.return_code = std::stoi(first);
+				location.redirect = second;
+			}
+		}
+		else if (line.compare(0, 12, "upload_store") == 0) {
+			std::string value = trim(line.substr(12));
+			if (value.back() != ';')
+				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in upload_store");
+			value.pop_back();
+			location.upload_store = trim(value);
+		}
 		else if (line.compare(0, 9, "autoindex") == 0) {
 			std::string val = trim(line.substr(9));
 			if (val.back() != ';')
@@ -138,7 +186,7 @@ void ConfigParser::parseServer(std::ifstream& file, Server& server) {
 				server.addServerName(name);
 		}
 		else if (line.compare(0, 20, "client_max_body_size") == 0) {
-			std::string size_str = trim(line.substr(22));
+			std::string size_str = trim(line.substr(20));
 			if (size_str.back() != ';')
 				throw CustomError("Line " + std::to_string(line_number) + ": missing ';' in client_max_body_size");
 			size_str.pop_back();
