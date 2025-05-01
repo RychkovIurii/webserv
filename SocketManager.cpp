@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 13:46:56 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 14:43:13 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,8 @@
 #include <errno.h>
 #include <sstream>
 #include <fstream>
+#include <sys/stat.h>
+#include <dirent.h>
 
 // Constructor: sets up sockets for each server defined in the config
 SocketManager::SocketManager(const std::vector<Server>& servers) {
@@ -125,6 +127,7 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 	if (bytes <= 0) {
 		close(client_fd);
 		_poll_fds.erase(_poll_fds.begin() + index);
+		_client_map.erase(client_fd);
 		return;
 	}
 	buffer[bytes] = '\0';
@@ -137,6 +140,7 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 		std::cerr << "Failed to parse HTTP request.\n";
 		close(client_fd);
 		_poll_fds.erase(_poll_fds.begin() + index);
+		_client_map.erase(client_fd);
 		return;
 	}
 	request.printRequest();
@@ -147,18 +151,58 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 	std::cout << "Resolved file path: " << filepath << std::endl;
 	std::ifstream file(filepath.c_str());
 	std::string body;
+	bool fileExists = file.good();
+	bool isDirectory = false;
 
-	if (file) {
+	// Check if path is a directory
+	struct stat fileStat;
+	if (stat(filepath.c_str(), &fileStat) == 0 && S_ISDIR(fileStat.st_mode)) {
+		std::cout << "Path is a directory.\n";
+		isDirectory = true;
+	}
+
+	if (fileExists && !isDirectory) {
 		std::stringstream ss;
 		ss << file.rdbuf();
 		body = ss.str();
-	} else {
+	} else if (isDirectory) {
+		// Check if autoindex is enabled
+		std::string uri = request.getPath();
+		const std::vector<Location>& locations = server.getLocations();
+		bool autoindexEnabled = false;
+		for (size_t i = 0; i < locations.size(); ++i) {
+			if (uri.find(locations[i].path) == 0 && locations[i].autoindex) {
+				autoindexEnabled = true;
+				break;
+			}
+		}
+
+		if (autoindexEnabled) {
+			DIR* dir = opendir(filepath.c_str());
+			if (dir == NULL) {
+				std::cout << "[AUTOINDEX] Failed to open directory!" << std::endl;
+			}
+			if (dir) {
+				struct dirent* entry;
+				std::stringstream indexStream;
+				indexStream << "<html><body><h1>Index of " << uri << "</h1><ul>";
+				while ((entry = readdir(dir)) != NULL) {
+					indexStream << "<li><a href='" << entry->d_name << "'>" << entry->d_name << "</a></li>"; // Think about .. and .
+				}
+				indexStream << "</ul></body></html>";
+				closedir(dir);
+				body = indexStream.str();
+			}
+		}
+	}
+
+	if (body.empty()) {
 		body = "<h1>404 Not Found</h1>";
 	}
 
 	std::stringstream response;
 	response << "HTTP/1.1 ";
-	if (file) {
+	if ((!body.empty() && fileExists) || isDirectory) {
 		response << "200 OK\r\n";
 	} else {
 		response << "404 Not Found\r\n";
@@ -172,6 +216,7 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 	std::string response_str = response.str();
 	std::cout << "Sending response: " << response_str << std::endl;
 	send(client_fd, response_str.c_str(), response_str.size(), 0);
+
 	close(client_fd);
 	_poll_fds.erase(_poll_fds.begin() + index);
 	_client_map.erase(client_fd);
