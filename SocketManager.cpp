@@ -6,13 +6,14 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 18:41:03 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 19:03:45 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "SocketManager.hpp"
 #include "HttpRequest.hpp"
 #include "HandlePostUpload.hpp"
+#include "HandleDelete.hpp"
 #include "FilePath.hpp"
 #include <iostream>
 #include <unistd.h>
@@ -185,6 +186,31 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 			return;
 		}
 	}
+
+	// Check if the request method is DELETE
+	if (request.getMethod() == "DELETE") {
+		std::string status = handleDelete(server, request);
+	
+		std::stringstream response;
+		response << "HTTP/1.1 " << status << " ";
+	
+		if (status == "200") response << "OK";
+		else if (status == "403") response << "Forbidden";
+		else if (status == "404") response << "Not Found";
+		else if (status == "405") response << "Method Not Allowed";
+		else response << "Internal Server Error";
+	
+		response << "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+	
+		std::string response_str = response.str();
+		send(client_fd, response_str.c_str(), response_str.size(), 0);
+		close(client_fd);
+		_poll_fds.erase(_poll_fds.begin() + index);
+		_client_map.erase(client_fd);
+		return;
+	}
+	
+
 	if (request.getMethod() != "GET") {
 		std::cerr << "Unsupported HTTP method: " << request.getMethod() << "\n";
 		close(client_fd);
