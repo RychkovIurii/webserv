@@ -6,11 +6,12 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/05/01 19:34:45 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 19:50:51 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 20:50:52 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "RunCGI.hpp"
+#include "HttpRequest.hpp"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -19,18 +20,18 @@
 #include <cstring>
 #include <iostream>
 
-std::string runCGI(const std::string& script_path, const HttpRequest& request) {
+std::string runCGI(const std::string& script_path, const HttpRequest& request, const Server& server) {
 	(void)request; // Suppress unused parameter warning temporarily
 	int pipe_fd[2];
 	if (pipe(pipe_fd) < 0) {
 		perror("pipe");
-		return "";
+		return buildErrorBody(server, 500);
 	}
 
 	pid_t pid = fork();
 	if (pid < 0) {
 		perror("fork");
-		return "";
+		return buildErrorBody(server, 500);
 	} else if (pid == 0) {
 		// Child
 		close(pipe_fd[0]);

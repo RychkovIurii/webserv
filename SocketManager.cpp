@@ -6,12 +6,13 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 19:49:24 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 20:59:31 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "SocketManager.hpp"
 #include "HttpRequest.hpp"
+#include "HttpResponse.hpp"
 #include "HandlePostUpload.hpp"
 #include "HandleDelete.hpp"
 #include "RunCGI.hpp"
@@ -156,15 +157,8 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 		const std::string result = handlePostUpload(server, request);
 		if (result.find("ERROR:") == 0) {
 			std::string code = result.substr(6);
-			std::stringstream response;
-			response << "HTTP/1.1 " << code << " ";
-			if (code == "403") response << "Forbidden";
-			else if (code == "405") response << "Method Not Allowed";
-			else if (code == "413") response << "Payload Too Large";
-			else response << "Internal Server Error";
-			response << "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-	
-			std::string response_str = response.str();
+			std::string body = buildErrorBody(server, std::atoi(code.c_str()));
+			std::string response_str = buildResponse(std::atoi(code.c_str()), body, "text/html");
 			send(client_fd, response_str.c_str(), response_str.size(), 0);
 			close(client_fd);
 			_poll_fds.erase(_poll_fds.begin() + index);
@@ -172,14 +166,7 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 			return;
 		} else {
 			std::string success_body = "<h1>Upload successful</h1><p>Saved to: " + result + "</p>";
-			std::stringstream response;
-			response << "HTTP/1.1 201 Created\r\n";
-			response << "Content-Type: text/html\r\n";
-			response << "Content-Length: " << success_body.size() << "\r\n";
-			response << "Connection: close\r\n\r\n";
-			response << success_body;
-	
-			std::string response_str = response.str();
+			std::string response_str = buildResponse(201, success_body, "text/html");
 			send(client_fd, response_str.c_str(), response_str.size(), 0);
 			close(client_fd);
 			_poll_fds.erase(_poll_fds.begin() + index);
@@ -231,7 +218,7 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 		if (filepath.size() >= loc.cgi_extension.size() &&
 			filepath.compare(filepath.size() - loc.cgi_extension.size(), loc.cgi_extension.size(), loc.cgi_extension) == 0) {
 
-			std::string cgi_output = runCGI(filepath, request);
+			std::string cgi_output = runCGI(filepath, request, server);
 
 			std::stringstream response;
 			size_t pos = cgi_output.find("\r\n\r\n");
