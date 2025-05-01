@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 20:59:31 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 21:26:50 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -177,20 +177,17 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 
 	// Check if the request method is DELETE
 	if (request.getMethod() == "DELETE") {
-		std::string status = handleDelete(server, request);
-	
-		std::stringstream response;
-		response << "HTTP/1.1 " << status << " ";
-	
-		if (status == "200") response << "OK";
-		else if (status == "403") response << "Forbidden";
-		else if (status == "404") response << "Not Found";
-		else if (status == "405") response << "Method Not Allowed";
-		else response << "Internal Server Error";
-	
-		response << "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-	
-		std::string response_str = response.str();
+		std::string statusStr = handleDelete(server, request);
+		int status = std::atoi(statusStr.c_str());
+
+		std::string body;
+		if (status != 200) {
+			body = buildErrorBody(server, status);
+		} else {
+			body = "<h1>Deleted successfully</h1>";
+		}
+
+		std::string response_str = buildResponse(status, body, "text/html");
 		send(client_fd, response_str.c_str(), response_str.size(), 0);
 		close(client_fd);
 		_poll_fds.erase(_poll_fds.begin() + index);
@@ -289,26 +286,13 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 	}
 
 	if (body.empty()) {
-		body = "<h1>404 Not Found</h1>";
-	}
-
-	std::stringstream response;
-	response << "HTTP/1.1 ";
-	if ((!body.empty() && fileExists) || isDirectory) {
-		response << "200 OK\r\n";
+		body = buildErrorBody(server, 404);
+		std::string response_str = buildResponse(404, body, "text/html");
+		send(client_fd, response_str.c_str(), response_str.size(), 0);
 	} else {
-		response << "404 Not Found\r\n";
+		std::string response_str = buildResponse(200, body, "text/html");
+		send(client_fd, response_str.c_str(), response_str.size(), 0);
 	}
-	response << "Content-Type: text/html\r\n";
-	response << "Content-Length: " << body.size() << "\r\n";
-	response << "Connection: close\r\n";
-	response << "\r\n";
-	response << body;
-
-	std::string response_str = response.str();
-	std::cout << "Sending response: " << response_str << std::endl;
-	send(client_fd, response_str.c_str(), response_str.size(), 0);
-
 	close(client_fd);
 	_poll_fds.erase(_poll_fds.begin() + index);
 	_client_map.erase(client_fd);
