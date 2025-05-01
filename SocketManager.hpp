@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:08:45 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 16:19:03 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 13:41:30 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,6 +38,7 @@ class SocketManager {
 	private:
 		std::vector<pollfd> _poll_fds;
 		std::map<int, Server> _listen_map;
+		std::map<int, Server> _client_map; 
 
 		void setupSockets(const std::vector<Server>& servers);
 		void handleNewConnection(int listen_fd);

@@ -6,13 +6,13 @@
 #    By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/04/29 14:10:33 by irychkov          #+#    #+#              #
-#    Updated: 2025/05/01 11:31:27 by irychkov         ###   ########.fr        #
+#    Updated: 2025/05/01 13:05:35 by irychkov         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 NAME = webserv
 SRCS = main.cpp Config.cpp Server.cpp Location.cpp ConfigParser.cpp \
-		SocketManager.cpp HttpRequest.cpp
+		SocketManager.cpp HttpRequest.cpp FilePath.cpp
 OBJ = $(SRCS:.cpp=.o)
 COMPILER = c++
 CFLAGS = -Wall -Wextra -Werror -Wshadow -std=c++17

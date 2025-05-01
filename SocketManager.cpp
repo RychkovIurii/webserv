@@ -6,12 +6,13 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 11:50:37 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 13:46:56 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "SocketManager.hpp"
 #include "HttpRequest.hpp"
+#include "FilePath.hpp"
 #include <iostream>
 #include <unistd.h>
 #include <fcntl.h>
@@ -19,6 +20,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <sstream>
+#include <fstream>
 
 // Constructor: sets up sockets for each server defined in the config
 SocketManager::SocketManager(const std::vector<Server>& servers) {
@@ -111,6 +113,9 @@ void SocketManager::handleNewConnection(int listen_fd) {
 
 	_poll_fds.push_back((pollfd){ client_fd, POLLIN, 0 });
 	std::cout << "Accepted client on fd: " << client_fd << std::endl;
+
+	// Store which server this client is connected to based on listen_fd
+	_client_map[client_fd] = _listen_map[listen_fd];
 }
 
 // Read data from client, send fixed response, then close
@@ -136,7 +141,42 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 	}
 	request.printRequest();
 
-	// Static response for now
+	// Get the server that accepted this client
+	const Server& server = _client_map[client_fd];
+	std::string filepath = buildFilePath(server, request);
+	std::cout << "Resolved file path: " << filepath << std::endl;
+	std::ifstream file(filepath.c_str());
+	std::string body;
+
+	if (file) {
+		std::stringstream ss;
+		ss << file.rdbuf();
+		body = ss.str();
+	} else {
+		body = "<h1>404 Not Found</h1>";
+	}
+
+	std::stringstream response;
+	response << "HTTP/1.1 ";
+	if (file) {
+		response << "200 OK\r\n";
+	} else {
+		response << "404 Not Found\r\n";
+	}
+	response << "Content-Type: text/html\r\n";
+	response << "Content-Length: " << body.size() << "\r\n";
+	response << "Connection: close\r\n";
+	response << "\r\n";
+	response << body;
+
+	std::string response_str = response.str();
+	std::cout << "Sending response: " << response_str << std::endl;
+	send(client_fd, response_str.c_str(), response_str.size(), 0);
+	close(client_fd);
+	_poll_fds.erase(_poll_fds.begin() + index);
+	_client_map.erase(client_fd);
+
+	/* // Static response for now
 	std::string body = "<h1>Hello from Webserv!</h1>";
 	std::stringstream response_stream;
 
@@ -152,5 +192,5 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 
 	send(client_fd, response.c_str(), response.size(), 0);
 	close(client_fd);
-	_poll_fds.erase(_poll_fds.begin() + index);
+	_poll_fds.erase(_poll_fds.begin() + index); */
 }
