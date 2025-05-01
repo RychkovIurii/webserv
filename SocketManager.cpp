@@ -6,11 +6,12 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/04/30 16:38:38 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 11:50:37 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "SocketManager.hpp"
+#include "HttpRequest.hpp"
 #include <iostream>
 #include <unistd.h>
 #include <fcntl.h>
@@ -121,6 +122,19 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 		_poll_fds.erase(_poll_fds.begin() + index);
 		return;
 	}
+	buffer[bytes] = '\0';
+	std::cout << "Received request: " << buffer << std::endl;
+
+	std::string raw_request(buffer);
+
+	HttpRequest request;
+	if (!request.parse(raw_request)) {
+		std::cerr << "Failed to parse HTTP request.\n";
+		close(client_fd);
+		_poll_fds.erase(_poll_fds.begin() + index);
+		return;
+	}
+	request.printRequest();
 
 	// Static response for now
 	std::string body = "<h1>Hello from Webserv!</h1>";
