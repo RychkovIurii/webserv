@@ -6,7 +6,7 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 19:03:45 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 19:49:24 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include "HttpRequest.hpp"
 #include "HandlePostUpload.hpp"
 #include "HandleDelete.hpp"
+#include "RunCGI.hpp"
 #include "FilePath.hpp"
 #include <iostream>
 #include <unistd.h>
@@ -219,9 +220,40 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 		return;
 	}
 
-	// Get request logic
+	// Build the file path based on server and request
 	std::string filepath = buildFilePath(server, request);
 	std::cout << "Resolved file path: " << filepath << std::endl;
+
+	// CGI handling
+	const std::vector<Location>& locs = server.getLocations();
+	for (size_t i = 0; i < locs.size(); ++i) {
+		const Location& loc = locs[i];
+		if (filepath.size() >= loc.cgi_extension.size() &&
+			filepath.compare(filepath.size() - loc.cgi_extension.size(), loc.cgi_extension.size(), loc.cgi_extension) == 0) {
+
+			std::string cgi_output = runCGI(filepath, request);
+
+			std::stringstream response;
+			size_t pos = cgi_output.find("\r\n\r\n");
+			if (pos != std::string::npos) {
+				std::string headers = cgi_output.substr(0, pos);
+				std::string body = cgi_output.substr(pos + 4);
+				response << "HTTP/1.1 200 OK\r\n" << headers << "\r\n\r\n" << body;
+			} else {
+				response << "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n";
+				response << "Content-Length: " << cgi_output.size() << "\r\n\r\n";
+				response << cgi_output;
+			}
+
+			std::string response_str = response.str();
+			send(client_fd, response_str.c_str(), response_str.size(), 0);
+			close(client_fd);
+			_poll_fds.erase(_poll_fds.begin() + index);
+			_client_map.erase(client_fd);
+			return;
+		}
+	}
+
 	std::ifstream file(filepath.c_str());
 	std::string body;
 	bool fileExists = file.good();
