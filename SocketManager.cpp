@@ -6,12 +6,13 @@
 /*   By: irychkov <irychkov@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/04/30 16:17:41 by irychkov          #+#    #+#             */
-/*   Updated: 2025/05/01 14:43:13 by irychkov         ###   ########.fr       */
+/*   Updated: 2025/05/01 18:41:03 by irychkov         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "SocketManager.hpp"
 #include "HttpRequest.hpp"
+#include "HandlePostUpload.hpp"
 #include "FilePath.hpp"
 #include <iostream>
 #include <unistd.h>
@@ -147,6 +148,52 @@ void SocketManager::handleClientData(int client_fd, size_t index) {
 
 	// Get the server that accepted this client
 	const Server& server = _client_map[client_fd];
+
+	// Check if the request method is POST and handle file upload
+	if (request.getMethod() == "POST") {
+		const std::string result = handlePostUpload(server, request);
+		if (result.find("ERROR:") == 0) {
+			std::string code = result.substr(6);
+			std::stringstream response;
+			response << "HTTP/1.1 " << code << " ";
+			if (code == "403") response << "Forbidden";
+			else if (code == "405") response << "Method Not Allowed";
+			else if (code == "413") response << "Payload Too Large";
+			else response << "Internal Server Error";
+			response << "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+	
+			std::string response_str = response.str();
+			send(client_fd, response_str.c_str(), response_str.size(), 0);
+			close(client_fd);
+			_poll_fds.erase(_poll_fds.begin() + index);
+			_client_map.erase(client_fd);
+			return;
+		} else {
+			std::string success_body = "<h1>Upload successful</h1><p>Saved to: " + result + "</p>";
+			std::stringstream response;
+			response << "HTTP/1.1 201 Created\r\n";
+			response << "Content-Type: text/html\r\n";
+			response << "Content-Length: " << success_body.size() << "\r\n";
+			response << "Connection: close\r\n\r\n";
+			response << success_body;
+	
+			std::string response_str = response.str();
+			send(client_fd, response_str.c_str(), response_str.size(), 0);
+			close(client_fd);
+			_poll_fds.erase(_poll_fds.begin() + index);
+			_client_map.erase(client_fd);
+			return;
+		}
+	}
+	if (request.getMethod() != "GET") {
+		std::cerr << "Unsupported HTTP method: " << request.getMethod() << "\n";
+		close(client_fd);
+		_poll_fds.erase(_poll_fds.begin() + index);
+		_client_map.erase(client_fd);
+		return;
+	}
+
+	// Get request logic
 	std::string filepath = buildFilePath(server, request);
 	std::cout << "Resolved file path: " << filepath << std::endl;
 	std::ifstream file(filepath.c_str());
